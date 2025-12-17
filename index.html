@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+    <!-- PWA Theme Colors -->
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f0f1a">
+    <meta name="msapplication-TileColor" content="#1a1a2e">
+    <meta name="msapplication-navbutton-color" content="#ff8c00">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- SEO Meta Tags -->
+    <meta name="description"
+        content="Face Morph Pro - Real-time face morphing web application. Transform your face into celebrities, historical figures, animals and more!">
+    <meta name="keywords" content="face morph, face swap, face filter, camera app, AR filter, celebrity face, pwa">
+    <meta name="author" content="Face Morph Pro">
+    <meta name="robots" content="index, follow">
+
+    <!-- PWA - Mobile Web App Capable -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-touch-fullscreen" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Face Morph">
+    <meta name="application-name" content="Face Morph Pro">
+    <meta name="msapplication-tooltip" content="Face Morph Pro - Real-time face morphing">
+    <meta name="msapplication-starturl" content="/">
+    <meta name="msapplication-tap-highlight" content="no">
+    <meta name="format-detection" content="telephone=no">
+
+    <!-- Permissions Policy for Camera -->
+    <meta http-equiv="Permissions-Policy" content="camera=(self), microphone=(self)">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="/">
+    <meta property="og:title" content="Face Morph Pro">
+    <meta property="og:description"
+        content="Real-time face morphing - Transform your face into celebrities, animals, and more!">
+    <meta property="og:image" content="static/icon-512.png">
+    <meta property="og:image:width" content="512">
+    <meta property="og:image:height" content="512">
+    <meta property="og:site_name" content="Face Morph Pro">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Face Morph Pro">
+    <meta name="twitter:description"
+        content="Real-time face morphing - Transform your face into celebrities, animals, and more!">
+    <meta name="twitter:image" content="static/icon-512.png">
+
+    <!-- App Icons - Multiple Sizes for Android/iOS -->
+    <link rel="icon" type="image/png" sizes="512x512" href="static/icon-512.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="static/icon-192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="static/icon-192.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="static/icon-192.png">
+    <link rel="shortcut icon" href="static/icon-192.png">
+
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="static/icon-192.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="static/icon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="static/icon-192.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="static/icon-192.png">
+
+    <!-- Apple Splash Screens (optional - can add later) -->
+    <link rel="apple-touch-startup-image" href="static/icon-512.png">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Preconnect to external resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+
+    <!-- DNS Prefetch for performance -->
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+
+    <title>Face Morph Pro</title>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then((registration) => {
+                        console.log('[PWA] Service Worker registered:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.error('[PWA] Service Worker registration failed:', error);
+                    });
+            });
+        }
+
+        // Install prompt handling
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('[PWA] Install prompt available');
+            e.preventDefault();
+            deferredPrompt = e;
+            // You could show an install button here
+        });
+
+        window.addEventListener('appinstalled', () => {
+            console.log('[PWA] App installed successfully');
+            deferredPrompt = null;
+        });
+    </script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar (Desktop) -->
+        <aside class="sidebar" id="sidebar">
+            <!-- Category Tabs -->
+            <nav class="category-tabs">
+                <button class="tab-btn" data-category="animals">
+                    <span class="tab-icon">🦁</span>
+                    <span class="tab-label">ANI</span>
+                </button>
+                <button class="tab-btn active" data-category="celebs">
+                    <span class="tab-icon">⭐</span>
+                    <span class="tab-label">CEL</span>
+                </button>
+                <button class="tab-btn" data-category="history">
+                    <span class="tab-icon">📜</span>
+                    <span class="tab-label">HIS</span>
+                </button>
+                <button class="tab-btn" data-category="races">
+                    <span class="tab-icon">🌍</span>
+                    <span class="tab-label">RAC</span>
+                </button>
+                <button class="tab-btn" data-category="addons">
+                    <span class="tab-icon">🎭</span>
+                    <span class="tab-label">ADD</span>
+                </button>
+            </nav>
+
+            <!-- Thumbnail Grid -->
+            <div class="thumbnail-container">
+                <div class="thumbnail-grid" id="thumbnailGrid">
+                    <!-- Thumbnails will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button class="action-btn scan-btn" id="scanBtn">
+                    <span class="btn-icon">⚥</span>
+                    <span class="btn-label">SCAN</span>
+                    <span class="scan-result" id="scanResult">--</span>
+                </button>
+                <button class="action-btn record-btn" id="recordBtn">
+                    <span class="btn-icon">🎥</span>
+                    <span class="btn-label">RECORD</span>
+                </button>
+                <button class="action-btn snapshot-btn" id="snapshotBtn">
+                    <span class="btn-icon">📷</span>
+                    <span class="btn-label">SNAPSHOT</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Video Container -->
+            <div class="video-container" id="videoContainer">
+                <video id="video" autoplay playsinline muted></video>
+                <canvas id="outputCanvas"></canvas>
+
+                <!-- Status Messages -->
+                <div class="status-overlay" id="statusOverlay">
+                    <span class="status-text" id="statusText"></span>
+                </div>
+
+                <!-- Loading Overlay -->
+                <div class="loading-overlay" id="loadingOverlay">
+                    <div class="loader"></div>
+                    <span>Initializing Camera...</span>
+                </div>
+
+                <!-- No Face Detected Warning -->
+                <div class="no-face-warning" id="noFaceWarning">
+                    <span>👤 Position your face in frame</span>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="controls-container">
+                <!-- Morph Slider -->
+                <div class="morph-slider-container">
+                    <label for="morphSlider" class="slider-label">
+                        <span class="slider-title">MORPH</span>
+                        <span class="slider-value" id="morphValue">0%</span>
+                    </label>
+                    <input type="range" id="morphSlider" class="morph-slider" min="0" max="100" value="0">
+                </div>
+
+                <!-- Mobile Action Bar -->
+                <div class="mobile-action-bar">
+                    <button class="mobile-action-btn" id="mobileScanBtn" title="Scan Gender">
+                        <span>⚥</span>
+                    </button>
+                    <button class="mobile-action-btn" id="mobileRecordBtn" title="Record">
+                        <span>🎥</span>
+                    </button>
+                    <button class="mobile-action-btn" id="mobileSnapshotBtn" title="Snapshot">
+                        <span>📷</span>
+                    </button>
+                    <button class="mobile-action-btn" id="toggleSidebarBtn" title="Toggle Menu">
+                        <span>☰</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mobile Category Bar -->
+            <nav class="mobile-category-bar" id="mobileCategoryBar">
+                <button class="mobile-tab-btn" data-category="animals">🦁 ANI</button>
+                <button class="mobile-tab-btn active" data-category="celebs">⭐ CEL</button>
+                <button class="mobile-tab-btn" data-category="history">📜 HIS</button>
+                <button class="mobile-tab-btn" data-category="races">🌍 RAC</button>
+                <button class="mobile-tab-btn" data-category="addons">🎭 ADD</button>
+            </nav>
+
+            <!-- Mobile Thumbnail Strip -->
+            <div class="mobile-thumbnail-strip" id="mobileThumbnailStrip">
+                <!-- Thumbnails will be populated by JavaScript -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Hidden elements for processing -->
+    <canvas id="processingCanvas" style="display: none;"></canvas>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <!-- Face-API.js for gender detection -->
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script src="morph-engine.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
