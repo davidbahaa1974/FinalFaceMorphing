@@ -75,14 +75,22 @@ class FaceMorphApp {
             // Load asset manifest
             await this.loadAssets();
 
-            // Initialize MediaPipe Face Mesh
-            await this.initFaceMesh();
+            // Run FaceMesh, FaceAPI, and Camera initialization in parallel
+            // Use allSettled so that if one fails, others can continue
+            const initPromises = [
+                this.initFaceMesh(),
+                this.initFaceApi(),
+                this.initCamera()
+            ];
 
-            // Initialize Face-API.js for gender detection
-            await this.initFaceApi();
+            const results = await Promise.allSettled(initPromises);
 
-            // Initialize camera
-            await this.initCamera();
+            // Check if any initialization failed
+            for (let i = 0; i < results.length; i++) {
+                if (results[i].status === 'rejected') {
+                    console.warn(`[FaceMorphApp] Initialization step ${i} failed:`, results[i].reason);
+                }
+            }
 
             // Setup event listeners
             this.setupEventListeners();
@@ -102,33 +110,64 @@ class FaceMorphApp {
 
     async initFaceApi() {
         try {
-            // Wait for face-api.js to be available
+            // Wait for face-api.js to be available (with 10 second timeout)
             if (typeof faceapi === 'undefined') {
                 console.log('[FaceAPI] Waiting for face-api.js to load...');
-                await new Promise((resolve) => {
+                await new Promise((resolve, reject) => {
+                    let resolved = false;
+                    const timeoutId = setTimeout(() => {
+                        if (!resolved) {
+                            resolved = true;
+                            console.warn('[FaceAPI] Timeout waiting for face-api.js, skipping gender detection');
+                            this.faceApiLoaded = false;
+                            resolve(); // Continue without face-api
+                        }
+                    }, 10000);
+
                     const checkInterval = setInterval(() => {
                         if (typeof faceapi !== 'undefined') {
-                            clearInterval(checkInterval);
-                            resolve();
+                            if (!resolved) {
+                                resolved = true;
+                                clearTimeout(timeoutId);
+                                clearInterval(checkInterval);
+                                resolve();
+                            }
                         }
                     }, 100);
                 });
+            }
+
+            // If face-api didn't load, skip model loading
+            if (typeof faceapi === 'undefined') {
+                console.log('[FaceAPI] face-api.js not available, skipping gender detection');
+                this.faceApiLoaded = false;
+                return;
             }
 
             const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
 
             console.log('[FaceAPI] Loading models...');
 
-            // Load required models for gender detection
-            await Promise.all([
+            // Load required models for gender detection with timeout
+            const modelLoadPromise = Promise.all([
                 faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                 faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL)
             ]);
 
-            this.faceApiLoaded = true;
-            console.log('[FaceAPI] Models loaded successfully');
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Model loading timeout')), 10000)
+            );
+
+            try {
+                await Promise.race([modelLoadPromise, timeoutPromise]);
+                this.faceApiLoaded = true;
+                console.log('[FaceAPI] Models loaded successfully');
+            } catch (error) {
+                console.warn('[FaceAPI] Model loading failed or timed out, continuing without gender detection:', error.message);
+                this.faceApiLoaded = false;
+            }
         } catch (error) {
-            console.error('[FaceAPI] Failed to load models:', error);
+            console.error('[FaceAPI] Failed to initialize:', error);
             this.faceApiLoaded = false;
         }
     }
@@ -203,6 +242,9 @@ class FaceMorphApp {
 
     async initFaceMesh() {
         return new Promise((resolve, reject) => {
+            let timeoutId = null;
+            let resolved = false;
+
             this.faceMesh = new FaceMesh({
                 locateFile: (file) => {
                     return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
@@ -218,11 +260,31 @@ class FaceMorphApp {
 
             this.faceMesh.onResults((results) => this.onFaceMeshResults(results));
 
+            // Set timeout for initialization (15 seconds)
+            timeoutId = setTimeout(() => {
+                if (!resolved) {
+                    resolved = true;
+                    console.warn('[FaceMesh] Initialization timed out after 15s, continuing anyway...');
+                    resolve(); // Continue without FaceMesh fully initialized
+                }
+            }, 15000);
+
             // Initialize
             this.faceMesh.initialize().then(() => {
-                console.log('[FaceMesh] Initialized');
-                resolve();
-            }).catch(reject);
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeoutId);
+                    console.log('[FaceMesh] Initialized');
+                    resolve();
+                }
+            }).catch((error) => {
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeoutId);
+                    console.error('[FaceMesh] Initialization error:', error);
+                    reject(error);
+                }
+            });
         });
     }
 
@@ -262,9 +324,32 @@ class FaceMorphApp {
 
             console.log(`[Camera] Started at ${videoWidth}x${videoHeight}`);
         } catch (error) {
-            console.error('[Camera] Error:', error);
-            this.loadingOverlay.querySelector('span').textContent = 'Camera access denied. Please allow camera access.';
-            throw error;
+            console.warn('[Camera] Error:', error);
+            console.log('[Camera] Camera access unavailable, using demo mode');
+            
+            // Ensure stream is null in demo mode
+            this.stream = null;
+            
+            // Set default canvas sizes for demo mode
+            const demoWidth = 1280;
+            const demoHeight = 720;
+            this.outputCanvas.width = demoWidth;
+            this.outputCanvas.height = demoHeight;
+            this.processingCanvas.width = demoWidth;
+            this.processingCanvas.height = demoHeight;
+
+            // Hide loading overlay after showing demo message briefly
+            setTimeout(() => {
+                this.loadingOverlay.classList.add('hidden');
+            }, 2000);
+
+            // Draw a placeholder on canvas
+            this.outputCtx.fillStyle = '#2a2a3e';
+            this.outputCtx.fillRect(0, 0, demoWidth, demoHeight);
+            this.outputCtx.fillStyle = '#666';
+            this.outputCtx.font = '24px Arial';
+            this.outputCtx.textAlign = 'center';
+            this.outputCtx.fillText('Demo Mode - Camera Not Available', demoWidth / 2, demoHeight / 2);
         }
     }
 
@@ -666,6 +751,9 @@ class FaceMorphApp {
                 this.targetCanvas.width = this.targetImage.width;
                 this.targetCanvas.height = this.targetImage.height;
                 this.targetCtx.drawImage(this.targetImage, 0, 0);
+                
+                // Clear morph engine cache when loading new target image
+                this.morphEngine.clearCache();
 
                 // Try to load landmarks
                 try {
@@ -759,6 +847,12 @@ class FaceMorphApp {
     }
 
     startContinuousGenderDetection() {
+        // Skip if face-api not loaded or no camera
+        if (!this.faceApiLoaded || !this.stream) {
+            console.log('[Gender] Skipping continuous gender detection - face-api not available or no camera');
+            return;
+        }
+
         // Wait 1.5 seconds for camera to stabilize, then start continuous detection
         setTimeout(() => {
             this.scanGender();  // Initial scan
