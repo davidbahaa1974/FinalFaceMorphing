@@ -16,39 +16,6 @@ class MorphEngine {
         // Key landmark indices to use for triangulation (reduced set for stability)
         // Using major face landmarks for more stable triangulation
         this.keyLandmarkIndices = this.getKeyLandmarkIndices();
-        
-        // Cache for triangles and masks
-        this.triangleCache = new Map();
-        this.maskCache = null;
-        this.lastMaskDimensions = null;
-        
-        // Reusable canvases for performance
-        this.tempCanvas = null;
-        this.tempCtx = null;
-        this.targetCanvas = null;
-        this.targetCtx = null;
-    }
-    
-    /**
-     * Get or create temporary canvas
-     */
-    getTempCanvas(width, height) {
-        if (!this.tempCanvas || this.tempCanvas.width !== width || this.tempCanvas.height !== height) {
-            this.tempCanvas = document.createElement('canvas');
-            this.tempCanvas.width = width;
-            this.tempCanvas.height = height;
-            this.tempCtx = this.tempCanvas.getContext('2d');
-        }
-        return { canvas: this.tempCanvas, ctx: this.tempCtx };
-    }
-    
-    /**
-     * Clear caches (call when target image changes)
-     */
-    clearCache() {
-        this.triangleCache.clear();
-        this.maskCache = null;
-        this.lastMaskDimensions = null;
     }
 
     /**
@@ -418,13 +385,25 @@ class MorphEngine {
         maskCtx.closePath();
         maskCtx.fill();
 
-        // Apply optimized blur passes for smooth feathering (reduced from 5 to 2 passes for better performance)
-        // Use larger blur radius with fewer passes for same effect but better performance
-        maskCtx.filter = 'blur(35px)';
+        // Apply multiple blur passes for ultra-smooth feathering
+        // Pass 1: Extra large blur for very smooth edges
+        maskCtx.filter = 'blur(60px)';
         maskCtx.drawImage(maskCanvas, 0, 0);
 
-        // Final pass with smaller blur
-        maskCtx.filter = 'blur(15px)';
+        // Pass 2: Large blur
+        maskCtx.filter = 'blur(50px)';
+        maskCtx.drawImage(maskCanvas, 0, 0);
+
+        // Pass 3: Medium blur
+        maskCtx.filter = 'blur(40px)';
+        maskCtx.drawImage(maskCanvas, 0, 0);
+
+        // Pass 4: Small blur for smooth gradient
+        maskCtx.filter = 'blur(25px)';
+        maskCtx.drawImage(maskCanvas, 0, 0);
+
+        // Pass 4: Final polish
+        maskCtx.filter = 'blur(10px)';
         maskCtx.drawImage(maskCanvas, 0, 0);
         maskCtx.filter = 'none';
 
@@ -513,56 +492,50 @@ class MorphEngine {
                 return [p[0] * scaleX, p[1] * scaleY];
             });
 
-            // Try to use cached triangles (key is target image dimensions)
-            const cacheKey = `${targetImageData.width}x${targetImageData.height}`;
-            let mappedTriangles = this.triangleCache.get(cacheKey);
-            
-            if (!mappedTriangles) {
-                // Compute triangles only if not in cache
-                const keyTargetPoints = this.keyLandmarkIndices
-                    .filter(i => scaledTargetLandmarks[i] && scaledTargetLandmarks[i][0] !== undefined)
-                    .map(i => ({ idx: i, pt: scaledTargetLandmarks[i] }));
+            // Compute Delaunay triangulation from TARGET landmarks (not camera)
+            // This ensures consistent triangulation like the Python version
+            // The target image landmarks are stable, camera landmarks change every frame
+            const keyTargetPoints = this.keyLandmarkIndices
+                .filter(i => scaledTargetLandmarks[i] && scaledTargetLandmarks[i][0] !== undefined)
+                .map(i => ({ idx: i, pt: scaledTargetLandmarks[i] }));
 
-                const trianglePoints = keyTargetPoints.map(p => p.pt);
-                const triangles = this.computeDelaunay(trianglePoints, width, height);
+            const trianglePoints = keyTargetPoints.map(p => p.pt);
+            const triangles = this.computeDelaunay(trianglePoints, width, height);
 
-                // Map triangle indices back to original landmark indices
-                mappedTriangles = triangles.map(tri => [
-                    keyTargetPoints[tri[0]].idx,
-                    keyTargetPoints[tri[1]].idx,
-                    keyTargetPoints[tri[2]].idx
-                ]).filter(tri =>
-                    tri[0] < srcLandmarks.length &&
-                    tri[1] < srcLandmarks.length &&
-                    tri[2] < srcLandmarks.length &&
-                    tri[0] < scaledTargetLandmarks.length &&
-                    tri[1] < scaledTargetLandmarks.length &&
-                    tri[2] < scaledTargetLandmarks.length
-                );
-                
-                // Cache the triangles
-                this.triangleCache.set(cacheKey, mappedTriangles);
-            }
+            // Map triangle indices back to original landmark indices
+            const mappedTriangles = triangles.map(tri => [
+                keyTargetPoints[tri[0]].idx,
+                keyTargetPoints[tri[1]].idx,
+                keyTargetPoints[tri[2]].idx
+            ]).filter(tri =>
+                tri[0] < srcLandmarks.length &&
+                tri[1] < srcLandmarks.length &&
+                tri[2] < srcLandmarks.length &&
+                tri[0] < scaledTargetLandmarks.length &&
+                tri[1] < scaledTargetLandmarks.length &&
+                tri[2] < scaledTargetLandmarks.length
+            );
 
             // Initialize output with source
             for (let i = 0; i < srcImageData.data.length; i++) {
                 outputData.data[i] = srcImageData.data[i];
             }
 
-            // Get or create temporary canvas (reuse instead of creating new)
-            const { canvas: tempCanvas, ctx: tempCtx } = this.getTempCanvas(srcImageData.width, srcImageData.height);
+            // Scale target image to source size
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = srcImageData.width;
+            tempCanvas.height = srcImageData.height;
+            const tempCtx = tempCanvas.getContext('2d');
 
             // Create ImageData from target
-            if (!this.targetCanvas || this.targetCanvas.width !== targetImageData.width || this.targetCanvas.height !== targetImageData.height) {
-                this.targetCanvas = document.createElement('canvas');
-                this.targetCanvas.width = targetImageData.width;
-                this.targetCanvas.height = targetImageData.height;
-                this.targetCtx = this.targetCanvas.getContext('2d');
-            }
-            this.targetCtx.putImageData(targetImageData, 0, 0);
+            const targetCanvas = document.createElement('canvas');
+            targetCanvas.width = targetImageData.width;
+            targetCanvas.height = targetImageData.height;
+            const targetCtx = targetCanvas.getContext('2d');
+            targetCtx.putImageData(targetImageData, 0, 0);
 
             // Draw scaled
-            tempCtx.drawImage(this.targetCanvas, 0, 0, srcImageData.width, srcImageData.height);
+            tempCtx.drawImage(targetCanvas, 0, 0, srcImageData.width, srcImageData.height);
             const scaledTargetData = tempCtx.getImageData(0, 0, srcImageData.width, srcImageData.height);
 
             // Create warped image buffer (initialized to transparent)
@@ -599,18 +572,8 @@ class MorphEngine {
                 this.warpTriangle(scaledTargetData, warpedData, targetTri, srcTri);
             }
 
-            // Create face mask (try to use cached if dimensions match)
-            let mask;
-            if (this.maskCache && this.lastMaskDimensions && 
-                this.lastMaskDimensions.width === width && 
-                this.lastMaskDimensions.height === height) {
-                mask = this.maskCache;
-            } else {
-                mask = this.createFaceMask(srcLandmarks, width, height);
-                this.maskCache = mask;
-                this.lastMaskDimensions = { width, height };
-            }
-            
+            // Create face mask
+            const mask = this.createFaceMask(srcLandmarks, width, height);
             if (!mask) {
                 console.error('[MorphEngine] Failed to create face mask');
                 return;
